@@ -1,0 +1,17 @@
+{
+  "id": "SYNTH-EVENT-001",
+  "data_kind": "synthetic_educational",
+  "event": "5M超跌 + 15M扫荡（虚构定义）",
+  "event_count": 120,
+  "event_success_count": 36,
+  "event_rate": 0.3,
+  "baseline_rate": 0.25,
+  "out_of_sample": "NOT_TESTED",
+  "transaction_costs": "NOT_MODELED",
+  "conclusion": "仅发现合成样本关联，不证明真实交易Alpha",
+  "warnings": [
+    "不能当作BTC历史真实结果",
+    "没有独立样本外检验",
+    "未纳入成交与强平"
+  ]
+}
