@@ -8,3 +8,9 @@ results/
 private_data/
 *.parquet
 .DS_Store
+
+# Raw ChatGPT export must never be committed to a public repository
+conversations.json
+chatgpt-export*.zip
+export-*.zip
+chat-original/raw-export/
