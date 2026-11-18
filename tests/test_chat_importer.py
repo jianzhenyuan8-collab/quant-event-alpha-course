@@ -45,6 +45,25 @@ class ExportImportTests(unittest.TestCase):
                             'content':{'parts':['## 第三十章：不应出现的旧分支']}}}
         chapters,_=mod.collect_assistant_chapters(sample)
         self.assertNotIn(30,chapters)
+    def test_placeholder_readme_does_not_block_import(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'chat-original'
+            out.mkdir()
+            (out/'README.md').write_text('placeholder')
+            chapters,_=mod.collect_assistant_chapters(self.sample())
+            mod.write_archive(self.sample(),chapters,out)
+            self.assertTrue((out/'01.md').exists())
+    def test_preface_and_unassigned_preserved(self):
+        sample=self.sample()
+        sample['mapping']['node-0']['message']['content']['parts']=[
+            '先从直觉理解，这是需要保留的前言。\n## 第一章：复利\n内容'
+        ]
+        sample['mapping']['node-1']['message']['content']['parts']=['中间没有章节标题的教学问答']
+        chapters,unassigned=mod.collect_assistant_chapters(sample)
+        self.assertIn('先从直觉理解',chapters[1][0]['text'])
+        with tempfile.TemporaryDirectory() as temp:
+            mod.write_archive(sample,chapters,Path(temp),unmatched=unassigned)
+            self.assertIn('中间没有章节标题', (Path(temp)/'_unassigned_assistant_messages.md').read_text())
     def test_no_user_messages(self):
         sample=self.sample()
         sample['mapping']['node-1']['message']['author']['role']='user'

@@ -7,10 +7,8 @@ headings. Non-text UI components and media cannot be faithfully restored from
 ChatGPT's JSON text export alone.
 """
 import argparse
-import datetime as dt
 import json
 import re
-import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -112,15 +110,18 @@ def collect_assistant_chapters(conv, min_chapter=1, max_chapter=60):
             continue
         matches = list(CHAPTER_HEADING.finditer(content))
         if not matches:
-            if '从零理解我们的交易数学模型' in content or '第60章' in content:
-                unmatched.append(message.get('id') or '')
+            unmatched.append({'message_id': message.get('id'), 'text': content})
             continue
+        # Preserve introductory paragraphs before the first chapter heading.
+        preface = content[:matches[0].start()]
         for i, match in enumerate(matches):
             number = numeral_to_int(match.group(2))
             if number < min_chapter or number > max_chapter:
                 continue
             end = matches[i+1].start() if i+1 < len(matches) else len(content)
             excerpt = content[match.start():end].rstrip()
+            if i == 0 and preface.strip():
+                excerpt = preface + excerpt
             if excerpt:
                 chapters.setdefault(number, []).append({
                     'message_id': message.get('id'),
@@ -131,10 +132,12 @@ def collect_assistant_chapters(conv, min_chapter=1, max_chapter=60):
     return chapters, unmatched
 
 
-def write_archive(conv, chapters, outdir, overwrite=False):
+def write_archive(conv, chapters, outdir, overwrite=False, unmatched=None):
     outdir = Path(outdir)
-    if outdir.exists() and any(outdir.iterdir()) and not overwrite:
-        raise ValueError(f'输出文件夹已有内容：{outdir}；请另选 --out 或添加 --overwrite')
+    if outdir.exists() and not overwrite:
+        existing = [x for x in outdir.iterdir() if x.name != 'README.md']
+        if existing:
+            raise ValueError(f'输出文件夹已有归档内容：{outdir}；请另选 --out 或添加 --overwrite')
     outdir.mkdir(parents=True, exist_ok=True)
     manifest = []
     for number in sorted(chapters):
@@ -155,6 +158,14 @@ def write_archive(conv, chapters, outdir, overwrite=False):
                          'message_ids': [e['message_id'] for e in entries],
                          'char_count': sum(len(e['text']) for e in entries),
                          'repetitions': len(entries)})
+    if unmatched:
+        aux = ['# 未归入章节的助手原消息（按对话顺序）', '',
+               '> 此处保留原聊天中没有可识别章节标题的助手消息；不做摘要或改写。', '']
+        for entry in unmatched:
+            aux.append(f'<!-- source_message_id: {entry.get("message_id")} -->')
+            aux.append(entry['text'])
+            aux.append('\n---\n')
+        (outdir / '_unassigned_assistant_messages.md').write_text('\n\n'.join(aux), encoding='utf-8')
     (outdir / 'manifest.json').write_text(json.dumps({
         'source': 'ChatGPT official conversations.json export',
         'conversation_id': conv.get('id'), 'conversation_title': conv.get('title'),
@@ -193,7 +204,7 @@ def main():
     if not chapters:
         print('未发现符合格式的章节标题。请检查选中的会话和原消息格式。', file=sys.stderr)
         return 2
-    manifest = write_archive(conv, chapters, args.out, args.overwrite)
+    manifest = write_archive(conv, chapters, args.out, args.overwrite, unmatched)
     print(f'已归档：{len(manifest)} 章；文件夹：{args.out}')
     print('未恢复章节：', ', '.join(str(x) for x in range(1, 61) if x not in chapters) or '无')
     print('注意：公开发布前，请先检查导出内容是否含有个人信息。')
